@@ -1,5 +1,6 @@
 import boto3
 from botocore.exceptions import ClientError
+import time
 
 # --- Configuration ---
 AWS_REGION = "eu-north-1"
@@ -7,7 +8,7 @@ AWS_REGION = "eu-north-1"
 # Replace with your actual VPC ID, Subnet IDs, and EC2 Instance ID
 VPC_ID = "vpc-04d79fb7a347a0060" 
 SUBNET_IDS = ["subnet-04905f299f1aef81d", "subnet-03507a7af79c9360a", "subnet-060cc81012213f684"]
-EC2_INSTANCE_ID = "i-018d505917d6a4ab3"
+EC2_INSTANCE_ID = "i-0f22544baa8b50f6f"
 
 # --- AWS Clients ---
 elb_client = boto3.client("elbv2", region_name=AWS_REGION)
@@ -53,14 +54,14 @@ def create_security_group(vpc_id):
                 }
             ]
         )
-        # Allow custom port (9000) for EC2 inbound from ALB
+        # Allow custom port (8080) for EC2 inbound from ALB
         ec2_client.authorize_security_group_ingress(
             GroupId=sg_id,
             IpPermissions=[
                 {
                     'IpProtocol': 'tcp',
-                    'FromPort': 9000,
-                    'ToPort': 9000,
+                    'FromPort': 8080,
+                    'ToPort': 8080,
                     'IpRanges': [{'CidrIp': '0.0.0.0/0'}] # This should ideally be restricted to ALB SG
                 }
             ]
@@ -78,8 +79,77 @@ def create_elastic_load_balancer(
     elb_name = "java-app-elb"
     tg_name = "java-app-tg"
 
-    # 1. Create Target Group
-    print(f"Creating Target Group {tg_name}...")
+    # --- Comprehensive Deletion Logic (delete in reverse order of creation) ---
+    # 1. Attempt to delete existing Listeners
+    print(f"Attempting to delete existing Listeners for {elb_name}...")
+    try:
+        elb_response = elb_client.describe_load_balancers(Names=[elb_name])
+        existing_elb_arn = elb_response['LoadBalancers'][0]['LoadBalancerArn']
+        listeners_response = elb_client.describe_listeners(LoadBalancerArn=existing_elb_arn)
+        for listener in listeners_response.get('Listeners', []):
+            print(f"Deleting listener: {listener['ListenerArn']}...")
+            elb_client.delete_listener(ListenerArn=listener['ListenerArn'])
+            print("Listener deleted.")
+        print("Finished attempting to delete listeners.")
+    except ClientError as e:
+        if "LoadBalancerNotFound" not in str(e) and "ListenerNotFound" not in str(e):
+            print(f"Error during listener deletion: {e}")
+        print("No existing listeners or load balancer found to delete, or encountered non-critical error.")
+
+    # 2. Attempt to delete existing Target Groups
+    print(f"Attempting to delete existing Target Group {tg_name}...")
+    try:
+        tg_response = elb_client.describe_target_groups(Names=[tg_name])
+        if tg_response['TargetGroups']:
+            existing_tg_arn = tg_response['TargetGroups'][0]['TargetGroupArn']
+            print(f"Deleting Target Group: {existing_tg_arn}...")
+            elb_client.delete_target_group(TargetGroupArn=existing_tg_arn)
+            print("Target Group deleted.")
+        print("Finished attempting to delete target groups.")
+    except ClientError as e:
+        if "TargetGroupNotFound" not in str(e):
+            print(f"Error during target group deletion: {e}")
+        print("No existing target group found to delete, or encountered non-critical error.")
+
+    # 3. Attempt to delete existing Load Balancer
+    print(f"Attempting to delete existing Load Balancer {elb_name}...")
+    try:
+        elb_response = elb_client.describe_load_balancers(Names=[elb_name])
+        if elb_response['LoadBalancers']:
+            existing_elb_arn = elb_response['LoadBalancers'][0]['LoadBalancerArn']
+            print(f"Deleting Load Balancer: {existing_elb_arn}...")
+            elb_client.delete_load_balancer(LoadBalancerArn=existing_elb_arn)
+            print("Load Balancer deleted.")
+        print("Finished attempting to delete load balancer.")
+    except ClientError as e:
+        if "LoadBalancerNotFound" not in str(e):
+            print(f"Error during load balancer deletion: {e}")
+        print("No existing load balancer found to delete, or encountered non-critical error.")
+
+    # Give AWS a moment to fully de-provision resources (important for clean recreation)
+    print("Waiting for resources to fully de-provision (10 seconds)...")
+    time.sleep(10)
+    # --- End Comprehensive Deletion Logic ---
+
+    # 1. Create Application Load Balancer
+    print(f"Creating Application Load Balancer {elb_name}...")
+    try:
+        response = elb_client.create_load_balancer(
+            Name=elb_name,
+            Subnets=subnet_ids,
+            SecurityGroups=[security_group_id],
+            Scheme="internet-facing",
+            Type="application",
+            IpAddressType="ipv4"
+        )
+        load_balancer_arn = response['LoadBalancers'][0]['LoadBalancerArn']
+        print(f"Load Balancer created: {load_balancer_arn}")
+    except ClientError as e:
+        print(f"Error creating Load Balancer: {e}")
+        exit(1)
+
+    # 2. Create Target Group
+    print(f"Creating Target Group {tg_name} with port 8080...")
     try:
         response = elb_client.create_target_group(
             Name=tg_name,
@@ -97,15 +167,10 @@ def create_elastic_load_balancer(
         target_group_arn = response['TargetGroups'][0]['TargetGroupArn']
         print(f"Target Group created: {target_group_arn}")
     except ClientError as e:
-        if "DuplicateTargetGroupName" in str(e):
-            print(f"Target Group {tg_name} already exists. Fetching ARN...")
-            response = elb_client.describe_target_groups(Names=[tg_name])
-            target_group_arn = response['TargetGroups'][0]['TargetGroupArn']
-        else:
-            print(f"Error creating Target Group: {e}")
-            exit(1)
+        print(f"Error creating Target Group: {e}")
+        exit(1)
 
-    # 2. Register EC2 instance with Target Group
+    # 3. Register EC2 instance with Target Group
     print(f"Registering instance {ec2_instance_id} with Target Group...")
     try:
         elb_client.register_targets(
@@ -114,33 +179,8 @@ def create_elastic_load_balancer(
         )
         print(f"Instance {ec2_instance_id} registered with {target_group_arn}")
     except ClientError as e:
-        if "Target already registered" in str(e):
-            print(f"Instance {ec2_instance_id} already registered with {target_group_arn}")
-        else:
-            print(f"Error registering target: {e}")
-            exit(1)
-
-    # 3. Create Application Load Balancer
-    print(f"Creating Application Load Balancer {elb_name}...")
-    try:
-        response = elb_client.create_load_balancer(
-            Name=elb_name,
-            Subnets=subnet_ids,
-            SecurityGroups=[security_group_id],
-            Scheme="internet-facing",
-            Type="application",
-            IpAddressType="ipv4"
-        )
-        load_balancer_arn = response['LoadBalancers'][0]['LoadBalancerArn']
-        print(f"Load Balancer created: {load_balancer_arn}")
-    except ClientError as e:
-        if "DuplicateLoadBalancerName" in str(e):
-            print(f"Load Balancer {elb_name} already exists. Fetching ARN...")
-            response = elb_client.describe_load_balancers(Names=[elb_name])
-            load_balancer_arn = response['LoadBalancers'][0]['LoadBalancerArn']
-        else:
-            print(f"Error creating Load Balancer: {e}")
-            exit(1)
+        print(f"Error registering target: {e}")
+        exit(1)
 
     # 4. Create Listener
     print(f"Creating Listener for {elb_name} on port 80...")
@@ -158,11 +198,8 @@ def create_elastic_load_balancer(
         )
         print("Listener created successfully on port 80.")
     except ClientError as e:
-        if "DuplicateListener" in str(e):
-            print(f"Listener already exists for {elb_name} on port 80.")
-        else:
-            print(f"Error creating Listener: {e}")
-            exit(1)
+        print(f"Error creating Listener: {e}")
+        exit(1)
 
     print(f"ELB setup complete. Access your application via the ELB DNS name.")
 
