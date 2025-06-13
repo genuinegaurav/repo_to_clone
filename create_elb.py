@@ -84,10 +84,10 @@ def create_elastic_load_balancer(
         response = elb_client.create_target_group(
             Name=tg_name,
             Protocol="HTTP",
-            Port=9000,
+            Port=8080,
             VpcId=vpc_id,
             HealthCheckProtocol="HTTP",
-            HealthCheckPort="9000",
+            HealthCheckPort="8080",
             HealthCheckPath="/",  # Assuming root path for health check
             HealthCheckIntervalSeconds=30,
             HealthCheckTimeoutSeconds=5,

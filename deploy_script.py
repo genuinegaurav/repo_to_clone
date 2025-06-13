@@ -5,7 +5,7 @@ import os
 GITHUB_REPO_URL = "git@github.com:genuinegaurav/repo_to_clone.git"
 PROJECT_DIR = "repo_to_clone"
 JAR_PATH = os.path.join(PROJECT_DIR, "build", "libs", "project.jar")
-JAVA_PORT = 9000
+JAVA_PORT = 8080
 
 
 def clone_repo():

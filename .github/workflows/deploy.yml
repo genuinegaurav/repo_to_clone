@@ -48,5 +48,5 @@ jobs:
             sudo docker stop java-app || true
             sudo docker rm java-app || true
             sudo docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            sudo docker run -d --name java-app -p 9000:9000 ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            sudo docker run -d --name java-app -p 8080:8080 ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
             sudo docker system prune -f # Clean up unused images 
