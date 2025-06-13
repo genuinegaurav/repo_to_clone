@@ -1,7 +1,7 @@
 import subprocess
 import os
 
-# --- Configuration ---
+
 GITHUB_REPO_URL = "git@github.com:genuinegaurav/repo_to_clone.git"
 PROJECT_DIR = "repo_to_clone"
 JAR_PATH = os.path.join(PROJECT_DIR, "build", "libs", "project.jar")
@@ -29,8 +29,7 @@ def start_java_app():
         print(f"Error: JAR file not found at {JAR_PATH}. Please ensure the repository is cloned and the path is correct.")
         exit(1)
     try:
-        # Using Popen to run in background and allow the script to continue
-        # In a real scenario, you might want more robust process management (e.g., systemd, supervisord)
+       
         process = subprocess.Popen(["java", "-jar", JAR_PATH])
         print(f"Java application started with PID: {process.pid}")
         print(f"Assuming Java application is now listening on port {JAVA_PORT}. You may need to verify this manually.")

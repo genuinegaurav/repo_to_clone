@@ -11,7 +11,7 @@ public class Main {
         int port = 8080;
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/", new MyHandler());
-        server.setExecutor(null); // creates a default executor
+        server.setExecutor(null); 
         server.start();
         System.out.println("Java application running and listening on port " + port);
     }

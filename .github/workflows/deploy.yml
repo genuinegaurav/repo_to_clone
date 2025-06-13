@@ -7,9 +7,9 @@ on:
 
 env:
   AWS_REGION: eu-north-1
-  ECR_REPOSITORY: java-app-repo # Replace with your ECR repository name
-  EC2_HOST: ec2-51-21-218-160.eu-north-1.compute.amazonaws.com # Replace with your EC2 public IP/hostname  # Replace with your EC2 public IP/hostname
-  EC2_USER: ec2-user # Replace with your EC2 user (e.g., ec2-user, ubuntu, centos)
+  ECR_REPOSITORY: java-app-repo 
+  EC2_HOST: ec2-51-21-218-160.eu-north-1.compute.amazonaws.com
+  EC2_USER: ec2-user 
 
 jobs:
   deploy:

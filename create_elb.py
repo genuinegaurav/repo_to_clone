@@ -2,15 +2,15 @@ import boto3
 from botocore.exceptions import ClientError
 import time
 
-# --- Configuration ---
+
 AWS_REGION = "eu-north-1"
 
-# Replace with your actual VPC ID, Subnet IDs, and EC2 Instance ID
+
 VPC_ID = "vpc-04d79fb7a347a0060" 
 SUBNET_IDS = ["subnet-04905f299f1aef81d", "subnet-03507a7af79c9360a", "subnet-060cc81012213f684"]
 EC2_INSTANCE_ID = "i-0f22544baa8b50f6f"
 
-# --- AWS Clients ---
+
 elb_client = boto3.client("elbv2", region_name=AWS_REGION)
 ec2_client = boto3.client("ec2", region_name=AWS_REGION)
 
@@ -42,7 +42,7 @@ def create_security_group(vpc_id):
         sg_id = response['GroupId']
         print(f"Security Group created: {sg_id}")
 
-        # Allow HTTP (port 80) for ALB inbound
+        
         ec2_client.authorize_security_group_ingress(
             GroupId=sg_id,
             IpPermissions=[
@@ -54,7 +54,7 @@ def create_security_group(vpc_id):
                 }
             ]
         )
-        # Allow custom port (8080) for EC2 inbound from ALB
+        
         ec2_client.authorize_security_group_ingress(
             GroupId=sg_id,
             IpPermissions=[
@@ -62,7 +62,7 @@ def create_security_group(vpc_id):
                     'IpProtocol': 'tcp',
                     'FromPort': 8080,
                     'ToPort': 8080,
-                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}] # This should ideally be restricted to ALB SG
+                    'IpRanges': [{'CidrIp': '0.0.0.0/0'}] 
                 }
             ]
         )
@@ -79,8 +79,6 @@ def create_elastic_load_balancer(
     elb_name = "java-app-elb"
     tg_name = "java-app-tg"
 
-    # --- Comprehensive Deletion Logic (delete in reverse order of creation) ---
-    # 1. Attempt to delete existing Listeners
     print(f"Attempting to delete existing Listeners for {elb_name}...")
     try:
         elb_response = elb_client.describe_load_balancers(Names=[elb_name])
@@ -96,7 +94,7 @@ def create_elastic_load_balancer(
             print(f"Error during listener deletion: {e}")
         print("No existing listeners or load balancer found to delete, or encountered non-critical error.")
 
-    # 2. Attempt to delete existing Target Groups
+    
     print(f"Attempting to delete existing Target Group {tg_name}...")
     try:
         tg_response = elb_client.describe_target_groups(Names=[tg_name])
@@ -111,7 +109,7 @@ def create_elastic_load_balancer(
             print(f"Error during target group deletion: {e}")
         print("No existing target group found to delete, or encountered non-critical error.")
 
-    # 3. Attempt to delete existing Load Balancer
+   
     print(f"Attempting to delete existing Load Balancer {elb_name}...")
     try:
         elb_response = elb_client.describe_load_balancers(Names=[elb_name])
@@ -126,12 +124,12 @@ def create_elastic_load_balancer(
             print(f"Error during load balancer deletion: {e}")
         print("No existing load balancer found to delete, or encountered non-critical error.")
 
-    # Give AWS a moment to fully de-provision resources (important for clean recreation)
+   
     print("Waiting for resources to fully de-provision (10 seconds)...")
     time.sleep(10)
-    # --- End Comprehensive Deletion Logic ---
+   
 
-    # 1. Create Application Load Balancer
+   
     print(f"Creating Application Load Balancer {elb_name}...")
     try:
         response = elb_client.create_load_balancer(
@@ -148,7 +146,7 @@ def create_elastic_load_balancer(
         print(f"Error creating Load Balancer: {e}")
         exit(1)
 
-    # 2. Create Target Group
+   
     print(f"Creating Target Group {tg_name} with port 8080...")
     try:
         response = elb_client.create_target_group(
@@ -158,7 +156,7 @@ def create_elastic_load_balancer(
             VpcId=vpc_id,
             HealthCheckProtocol="HTTP",
             HealthCheckPort="8080",
-            HealthCheckPath="/",  # Assuming root path for health check
+            HealthCheckPath="/", 
             HealthCheckIntervalSeconds=30,
             HealthCheckTimeoutSeconds=5,
             HealthyThresholdCount=2,
@@ -170,7 +168,7 @@ def create_elastic_load_balancer(
         print(f"Error creating Target Group: {e}")
         exit(1)
 
-    # 3. Register EC2 instance with Target Group
+   
     print(f"Registering instance {ec2_instance_id} with Target Group...")
     try:
         elb_client.register_targets(
@@ -182,7 +180,7 @@ def create_elastic_load_balancer(
         print(f"Error registering target: {e}")
         exit(1)
 
-    # 4. Create Listener
+  
     print(f"Creating Listener for {elb_name} on port 80...")
     try:
         elb_client.create_listener(
@@ -204,15 +202,14 @@ def create_elastic_load_balancer(
     print(f"ELB setup complete. Access your application via the ELB DNS name.")
 
 if __name__ == "__main__":
-    # Ensure boto3 is installed: pip install boto3
-    # Ensure your AWS credentials are configured (e.g., via AWS CLI or environment variables)
+   
     
     if VPC_ID == "vpc-xxxxxxxxxxxxxxxxx" or not SUBNET_IDS or EC2_INSTANCE_ID == "i-xxxxxxxxxxxxxxxxx":
         print("Please update VPC_ID, SUBNET_IDS, and EC2_INSTANCE_ID in the script before running.")
         exit(1)
 
-    # Create or get security group
+   
     sg_id = create_security_group(VPC_ID)
 
-    # Create ELB components
+    
     create_elastic_load_balancer(VPC_ID, SUBNET_IDS, EC2_INSTANCE_ID, sg_id) 
