@@ -44,7 +44,6 @@ jobs:
           host: ${{ env.EC2_HOST }}
           username: ${{ env.EC2_USER }}
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          passphrase: ${{ secrets.EC2_SSH_PASSPHRASE }}
           script: |
             sudo docker stop java-app || true
             sudo docker rm java-app || true
